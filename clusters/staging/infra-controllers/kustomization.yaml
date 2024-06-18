@@ -1,5 +1,17 @@
-apiVersion: kustomize.config.k8s.io/v1beta1
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
-namespace: flux-system
-resources:
-  - ../../../workloads/infra-controllers
+metadata:
+  name: infra-controllers
+  namespace: flux-system
+spec:
+  interval: 1h
+  retryInterval: 3m
+  timeout: 5m
+  prune: true
+  wait: true
+  path: ./workloads/infra-controllers
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+    namespace: flux-system
