@@ -1,0 +1,82 @@
+version: '3'
+
+tasks:
+  cleanup:
+    internal: true
+    silent: true
+    cmds:
+      - rm -f /tmp/id_flux /tmp/id_flux.pub
+
+  install-flux-cli:
+    internal: true
+    cmds:
+      - brew install fluxcd/tap/flux
+    status:
+      - flux -v
+
+  install-kubectl:
+    internal: true
+    cmds:
+      - brew install kubectl
+    status:
+      - kubectl version
+
+  generate-ssh-key-pair:
+    internal: true
+    silent: true
+    cmds:
+      - echo "Generating SSH Key Pair..."
+      - ssh-keygen -q -t ed25519 -C '' -N '' -f /tmp/id_flux
+
+  add-deploy-key:
+    internal: true
+    silent: true
+    vars:
+      KEY:
+        sh: cat /tmp/id_flux.pub
+    cmds:
+      - echo -e "\nAdd the deploy key to your Github repo ensuring write access:\n\n{{.KEY}}\n"
+      - task: confirm-deploy-key
+
+  confirm-deploy-key:
+    internal: true
+    silent: true
+    prompt: "Continue once the deploy key has been added to your repo. Continue"
+
+  confirm-kube-context:
+    internal: true
+    silent: true
+    vars:
+      KUBE_CONTEXT:
+        sh: kubectl config current-context
+    prompt: 'Your kube context is {{.KUBE_CONTEXT}}. Continue'
+
+  confirm-bootstrap-cmd:
+    internal: true
+    silent: true
+    prompt: Continue
+
+  bootstrap:
+    deps:
+      - install-flux-cli
+      - install-kubectl
+    vars:
+      CLUSTER: '{{.CLI_ARGS}}'
+      CMD: |
+        flux bootstrap git \
+          --url=ssh://git@github.com/kloudyuk/flux \
+          --branch=main \
+          --path=clusters/{{.CLUSTER}} \
+          --private-key-file=/tmp/id_flux \
+          --components-extra=image-reflector-controller,image-automation-controller \
+          --silent
+    silent: true
+    cmds:
+      - defer: { task: cleanup }
+      - task: generate-ssh-key-pair
+      - task: add-deploy-key
+      - task: confirm-kube-context
+      - echo -e "The following command will be executed:\n"
+      - echo '{{.CMD}}'
+      - task: confirm-bootstrap-cmd
+      - eval '{{.CMD}}'
